@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    networks:
+      - stimulus_network
+    ports:
+      - "5436:5432"
+  backend:
+    build: ./stimulus_aiu_backend
+    command: gunicorn stimulus_aiu.wsgi:application --bind 0.0.0.0:8000
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - stimulus_network
+    ports:
+      - "8010:8000"
+  frontend:
+    build: ./stimulus_aiu_frontend
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media         
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend
+    networks:
+      - stimulus_network
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+networks:
+  stimulus_network:
+    driver: bridge
