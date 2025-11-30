@@ -1,11 +1,12 @@
 import axios from "axios";
 
-const baseURL = (
-  process.env.REACT_APP_API_BASE_URL || "http://127.0.0.1:8000"
-).replace(/\/+$/, "");
+
+const baseURL =
+  process.env.NODE_ENV === "production" ? "/api" : "http://127.0.0.1:8000";
 
 const axiosClient = axios.create({
   baseURL,
+  withCredentials: true,
 });
 
 axiosClient.interceptors.request.use((config) => {
