@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /app/media /app/staticfiles
+
 COPY requirements.txt /app/
 
 RUN pip install --upgrade pip
@@ -18,5 +20,4 @@ RUN pip install -r requirements.txt
 
 COPY . /app/
 
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "stimulus_aiu_backend.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "stimulus_aiu.wsgi:application"]
