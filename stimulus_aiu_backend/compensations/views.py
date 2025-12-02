@@ -1,4 +1,3 @@
-# compensations/views.py
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
@@ -95,7 +94,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         app.save(update_fields=["status", "admin_comment"])
         return Response({"detail": "Заявка отклонена"})
 
-    @action(detail=True, methods=["get"], permission_classes=[permissions.IsAdminUser])
+    @action(detail=True, methods=["get"])
     def docx(self, request, pk=None):
         app = self.get_object()
         filename, file_content = generate_application_docx(app)

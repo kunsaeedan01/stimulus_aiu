@@ -155,7 +155,7 @@ export default function ApplicationForm({ initialValues, applicationId }) {
             return;
           }
           if (paper.indexation === "scopus" && !paper.percentile) {
-            setError(`papers.${i}.percentile`, { message: "Укажите перцентиль." });
+            setError(`papers.${i}.percentile`, { message: "Укажите процентиль." });
             setSubmitting(false);
             return;
           }
@@ -410,7 +410,7 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
 
         {indexation === "scopus" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">Перцентиль</label>
+            <label className="block text-sm font-medium text-gray-700">Процентиль</label>
             <input
               type="number"
               min={1}

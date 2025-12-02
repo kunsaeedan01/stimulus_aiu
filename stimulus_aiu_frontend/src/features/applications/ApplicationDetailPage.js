@@ -266,7 +266,7 @@ export default function ApplicationDetailPage() {
                     <span className="text-gray-500">Индексация:</span>{" "}
                     <span className="font-medium">
                       {paper.indexation === "scopus" ? "Scopus" : "Web of Science"}
-                      {paper.indexation === "scopus" && paper.percentile ? ` (Перцентиль: ${paper.percentile})` : ""}
+                      {paper.indexation === "scopus" && paper.percentile ? ` (Процентиль: ${paper.percentile})` : ""}
                       {paper.indexation === "wos" && paper.quartile ? ` (Квартиль: ${paper.quartile})` : ""}
                     </span>
                   </div>
