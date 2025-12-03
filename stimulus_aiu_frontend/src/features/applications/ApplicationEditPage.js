@@ -11,7 +11,6 @@ export default function ApplicationEditPage() {
 
   useEffect(() => {
     const ac = new AbortController();
-    
     async function loadData() {
       try {
         setLoading(true);
@@ -30,10 +29,11 @@ export default function ApplicationEditPage() {
             doi: p.doi || "",
             publication_date: p.publication_date || "",
             year: p.year || "",
-            number: p.number || "",
-            volume: p.volume || "",
+            number: p.volume
+              ? `${p.number || ""} (${p.volume})`
+              : p.number || "",
+            volume: "",
             pages: p.pages || "",
-            source_url: p.source_url || "",
             has_university_affiliation: p.has_university_affiliation || false,
             registered_in_platonus: p.registered_in_platonus || false,
             coauthors: (p.coauthors || []).map((c) => ({
@@ -45,7 +45,7 @@ export default function ApplicationEditPage() {
               telephone: c.telephone || "",
               email: c.email || "",
             })),
-            file_upload: null, 
+            file_upload: null,
           })),
         };
 

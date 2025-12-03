@@ -19,8 +19,14 @@ const INDEXATION_OPTIONS = [
 
 const LOCAL_FACULTIES = [
   { value: "pedagogical_institute", label: "Педагогический институт" },
-  { value: "arts_humanities", label: "Высшая школа искусства и гуманитарных наук" },
-  { value: "it_engineering", label: "Высшая школа информационных технологий и инженерии" },
+  {
+    value: "arts_humanities",
+    label: "Высшая школа искусства и гуманитарных наук",
+  },
+  {
+    value: "it_engineering",
+    label: "Высшая школа информационных технологий и инженерии",
+  },
   { value: "natural_sciences", label: "Высшая школа естественных наук" },
   { value: "economics", label: "Высшая школа экономики" },
   { value: "law", label: "Высшая школа права" },
@@ -31,7 +37,6 @@ export default function ApplicationForm({ initialValues, applicationId }) {
   const isEditMode = Boolean(applicationId);
 
   const [faculties, setFaculties] = useState(LOCAL_FACULTIES);
-  const [reportYears, setReportYears] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
@@ -94,13 +99,9 @@ export default function ApplicationForm({ initialValues, applicationId }) {
     const ac = new AbortController();
     (async () => {
       try {
-        const [facRes, yearsRes] = await Promise.allSettled([
-          fetchFaculties({ signal: ac.signal }),
-          fetchReportYears({ signal: ac.signal }),
-        ]);
-
-        if (facRes.status === "fulfilled" && Array.isArray(facRes.value.data)) {
-          const apiFacs = facRes.value.data
+        const facRes = await fetchFaculties({ signal: ac.signal });
+        if (facRes && Array.isArray(facRes.data)) {
+          const apiFacs = facRes.data
             .map((f) => {
               if (typeof f === "object" && !Array.isArray(f))
                 return { value: f.value, label: f.label };
@@ -111,150 +112,147 @@ export default function ApplicationForm({ initialValues, applicationId }) {
             .filter(Boolean);
           if (apiFacs.length) setFaculties(apiFacs);
         }
-
-        if (yearsRes.status === "fulfilled" && Array.isArray(yearsRes.value.data)) {
-          setReportYears(yearsRes.value.data);
-        }
-      } catch (err) {
-        // ignore cancellation
-      }
+      } catch (err) {}
     })();
     return () => ac.abort();
   }, []);
-
-  const onSave = (actionType) => handleSubmit(async (values) => {
-    setSubmitting(true);
-    setServerError(null);
-    setSuccessMessage(null);
-
-    const isSubmitAction = actionType === 'submit';
-
-    try {
-      if (!values.faculty) {
-        setError("faculty", { message: "Выберите факультет" });
-        setSubmitting(false);
-        return;
-      }
-      if (isSubmitAction) {
-        if (!values.papers || values.papers.length === 0) {
-          setServerError("Для отправки необходимо добавить хотя бы одну публикацию.");
+  const onSave = (actionType) =>
+    handleSubmit(async (values) => {
+      setSubmitting(true);
+      setServerError(null);
+      setSuccessMessage(null);
+      const isSubmitAction = actionType === "submit";
+      try {
+        if (!values.faculty) {
+          setError("faculty", { message: "Выберите факультет" });
           setSubmitting(false);
           return;
         }
-
-        for (let i = 0; i < values.papers.length; i += 1) {
-          const paper = values.papers[i];
-          if (!paper.has_university_affiliation) {
-            setError(`papers.${i}.has_university_affiliation`, { message: "Требуется подтверждение аффилиации." });
+        if (isSubmitAction) {
+          if (!values.papers || values.papers.length === 0) {
+            setServerError(
+              "Для отправки необходимо добавить хотя бы одну публикацию."
+            );
             setSubmitting(false);
             return;
           }
-          if (!paper.registered_in_platonus) {
-            setError(`papers.${i}.registered_in_platonus`, { message: "Требуется подтверждение Platonus." });
-            setSubmitting(false);
-            return;
-          }
-          if (paper.indexation === "scopus" && !paper.percentile) {
-            setError(`papers.${i}.percentile`, { message: "Укажите процентиль." });
-            setSubmitting(false);
-            return;
-          }
-          if (!paper.id && !paper.file_upload) {
-             setError(`papers.${i}.file_upload`, { message: "Загрузите файл." });
-             setSubmitting(false);
-             return;
+          for (let i = 0; i < values.papers.length; i += 1) {
+            const paper = values.papers[i];
+            if (!paper.has_university_affiliation) {
+              setError(`papers.${i}.has_university_affiliation`, {
+                message: "Требуется подтверждение аффилиации.",
+              });
+              setSubmitting(false);
+              return;
+            }
+            if (!paper.registered_in_platonus) {
+              setError(`papers.${i}.registered_in_platonus`, {
+                message: "Требуется подтверждение Platonus.",
+              });
+              setSubmitting(false);
+              return;
+            }
+            if (paper.indexation === "scopus" && !paper.percentile) {
+              setError(`papers.${i}.percentile`, {
+                message: "Укажите процентиль.",
+              });
+              setSubmitting(false);
+              return;
+            }
+            if (!paper.id && !paper.file_upload) {
+              setError(`papers.${i}.file_upload`, {
+                message: "Загрузите файл.",
+              });
+              setSubmitting(false);
+              return;
+            }
           }
         }
-      }
-      let currentAppId = applicationId;
-      
-      if (isEditMode) {
-        await updateApplication(currentAppId, {
-          faculty: values.faculty,
-          report_year: values.report_year,
-        });
-      } else {
-        const appRes = await createApplication({
-          faculty: values.faculty,
-          report_year: values.report_year,
-        });
-        currentAppId = appRes.data.id;
-      }
-      const processedPaperIds = new Set();
+        let currentAppId = applicationId;
 
-      for (const paper of values.papers) {
-        const paperData = {
-          application: currentAppId,
-          ...paper,
-          percentile: paper.percentile ? Number(paper.percentile) : null,
-          volume: paper.volume ? Number(paper.volume) : null,
-          coauthors: (paper.coauthors || []).filter(c => c.full_name?.trim()),
-        };
-
-        if (paper.id) {
-          processedPaperIds.add(paper.id);
-          await updatePaper(paper.id, paperData);
+        if (isEditMode) {
+          await updateApplication(currentAppId, {
+            faculty: values.faculty,
+            report_year: values.report_year,
+          });
         } else {
-          await createPaper({ data: paperData });
+          const appRes = await createApplication({
+            faculty: values.faculty,
+            report_year: values.report_year,
+          });
+          currentAppId = appRes.data.id;
         }
-      }
-      if (isEditMode) {
-        for (const orig of originalPapers) {
-          if (!processedPaperIds.has(orig.id)) {
-            await deletePaper(orig.id);
+        const processedPaperIds = new Set();
+
+        for (const paper of values.papers) {
+          const paperData = {
+            application: currentAppId,
+            ...paper,
+            percentile: paper.percentile ? Number(paper.percentile) : null,
+            volume: null,
+            coauthors: (paper.coauthors || []).filter((c) =>
+              c.full_name?.trim()
+            ),
+          };
+
+          if (paper.id) {
+            processedPaperIds.add(paper.id);
+            await updatePaper(paper.id, paperData);
+          } else {
+            await createPaper({ data: paperData });
           }
         }
+        if (isEditMode) {
+          for (const orig of originalPapers) {
+            if (!processedPaperIds.has(orig.id)) {
+              await deletePaper(orig.id);
+            }
+          }
+        }
+
+        if (isSubmitAction) {
+          await submitApplication(currentAppId);
+          setSuccessMessage("Заявка успешно отправлена!");
+        } else {
+          setSuccessMessage("Черновик сохранен.");
+        }
+
+        setTimeout(() => {
+          navigate("/applications");
+        }, 1000);
+      } catch (e) {
+        console.error(e);
+        setServerError(e.response?.data?.detail || "Ошибка при сохранении.");
+      } finally {
+        setSubmitting(false);
       }
-
-      if (isSubmitAction) {
-        await submitApplication(currentAppId);
-        setSuccessMessage("Заявка успешно отправлена!");
-      } else {
-        setSuccessMessage("Черновик сохранен.");
-      }
-
-      setTimeout(() => {
-        navigate("/applications");
-      }, 1000);
-
-    } catch (e) {
-      console.error(e);
-      setServerError(e.response?.data?.detail || "Ошибка при сохранении.");
-    } finally {
-      setSubmitting(false);
-    }
-  });
+    });
 
   return (
     <form className="space-y-6 bg-white shadow rounded-2xl p-6">
+      <input type="hidden" {...register("report_year")} />
+
       <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Высшая школа</label>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Высшая школа
+          </label>
           <select
             className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
             {...register("faculty")}
           >
             <option value="">Выберите...</option>
             {faculties.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
             ))}
           </select>
-          {errors.faculty && <p className="mt-1 text-sm text-red-600">{errors.faculty.message}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Отчётный год</label>
-          <select
-            className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-            {...register("report_year")}
-          >
-            {reportYears.length === 0 && (
-              <option value={String(new Date().getFullYear())}>{new Date().getFullYear()}</option>
-            )}
-            {reportYears.map((year) => (
-              <option key={year} value={String(year)}>{year}</option>
-            ))}
-          </select>
+          {errors.faculty && (
+            <p className="mt-1 text-sm text-red-600">
+              {errors.faculty.message}
+            </p>
+          )}
         </div>
       </div>
 
@@ -264,14 +262,16 @@ export default function ApplicationForm({ initialValues, applicationId }) {
           <button
             type="button"
             className="inline-flex items-center px-3 py-1.5 rounded-lg border border-blue-600 text-blue-600 text-sm font-medium hover:bg-blue-50"
-            onClick={() => appendPaper({
-              title: "",
-              journal_or_source: "",
-              indexation: "scopus",
-              has_university_affiliation: false,
-              registered_in_platonus: false,
-              coauthors: [{ is_aiu_employee: false, full_name: "" }]
-            })}
+            onClick={() =>
+              appendPaper({
+                title: "",
+                journal_or_source: "",
+                indexation: "scopus",
+                has_university_affiliation: false,
+                registered_in_platonus: false,
+                coauthors: [{ is_aiu_employee: false, full_name: "" }],
+              })
+            }
           >
             Добавить публикацию
           </button>
@@ -293,8 +293,16 @@ export default function ApplicationForm({ initialValues, applicationId }) {
         </div>
       </div>
 
-      {serverError && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{serverError}</div>}
-      {successMessage && <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg">{successMessage}</div>}
+      {serverError && (
+        <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+          {serverError}
+        </div>
+      )}
+      {successMessage && (
+        <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg">
+          {successMessage}
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-4 border-t">
         <button
@@ -308,7 +316,7 @@ export default function ApplicationForm({ initialValues, applicationId }) {
         <button
           type="button"
           className="px-4 py-2 rounded-lg bg-gray-600 text-white font-medium hover:bg-gray-700 disabled:opacity-50"
-          onClick={onSave('draft')}
+          onClick={onSave("draft")}
           disabled={submitting}
         >
           {submitting ? "..." : "Сохранить как черновик"}
@@ -316,7 +324,7 @@ export default function ApplicationForm({ initialValues, applicationId }) {
         <button
           type="button"
           className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
-          onClick={onSave('submit')}
+          onClick={onSave("submit")}
           disabled={submitting}
         >
           {submitting ? "..." : "Отправить"}
@@ -326,19 +334,31 @@ export default function ApplicationForm({ initialValues, applicationId }) {
   );
 }
 
-function PaperFieldItem({ index, control, register, errors, removePaper, papersCount, clearErrors }) {
+function PaperFieldItem({
+  index,
+  control,
+  register,
+  errors,
+  removePaper,
+  papersCount,
+  clearErrors,
+}) {
   const indexation = useWatch({
     control,
     name: `papers.${index}.indexation`,
-    defaultValue: "scopus"
+    defaultValue: "scopus",
   });
-  
+
   const fileId = useWatch({
     control,
     name: `papers.${index}.id`,
   });
 
-  const { fields: coauthorFields, append, remove } = useFieldArray({
+  const {
+    fields: coauthorFields,
+    append,
+    remove,
+  } = useFieldArray({
     control,
     name: `papers.${index}.coauthors`,
   });
@@ -360,19 +380,27 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700">Название</label>
+          <label className="block text-sm font-medium text-gray-700">
+            Название
+          </label>
           <input
             type="text"
             className="mt-1 block w-full rounded-lg border-gray-300"
-            {...register(`papers.${index}.title`, { required: "Введите название" })}
+            {...register(`papers.${index}.title`, {
+              required: "Введите название",
+            })}
           />
           {errors.papers?.[index]?.title && (
-            <p className="mt-1 text-sm text-red-600">{errors.papers[index].title.message}</p>
+            <p className="mt-1 text-sm text-red-600">
+              {errors.papers[index].title.message}
+            </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Журнал / источник</label>
+          <label className="block text-sm font-medium text-gray-700">
+            Журнал / источник
+          </label>
           <input
             type="text"
             className="mt-1 block w-full rounded-lg border-gray-300"
@@ -381,20 +409,26 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Индексация</label>
+          <label className="block text-sm font-medium text-gray-700">
+            Индексация
+          </label>
           <select
             className="mt-1 block w-full rounded-lg border-gray-300"
             {...register(`papers.${index}.indexation`)}
           >
             {INDEXATION_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
             ))}
           </select>
         </div>
 
         {indexation === "wos" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">Квартиль</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Квартиль
+            </label>
             <select
               className="mt-1 block w-full rounded-lg border-gray-300"
               {...register(`papers.${index}.quartile`)}
@@ -410,7 +444,9 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
 
         {indexation === "scopus" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700">Процентиль</label>
+            <label className="block text-sm font-medium text-gray-700">
+              Процентиль
+            </label>
             <input
               type="number"
               min={1}
@@ -419,31 +455,76 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
               {...register(`papers.${index}.percentile`)}
             />
             {errors.papers?.[index]?.percentile && (
-              <p className="mt-1 text-sm text-red-600">{errors.papers[index].percentile.message}</p>
+              <p className="mt-1 text-sm text-red-600">
+                {errors.papers[index].percentile.message}
+              </p>
             )}
           </div>
         )}
 
-        <div><label className="block text-sm font-medium text-gray-700">DOI</label><input type="text" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.doi`)} /></div>
-        <div><label className="block text-sm font-medium text-gray-700">Дата публикации</label><input type="date" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.publication_date`)} /></div>
-        <div><label className="block text-sm font-medium text-gray-700">Год</label><input type="number" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.year`)} /></div>
-        <div><label className="block text-sm font-medium text-gray-700">Номер (Issue)</label><input type="text" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.number`)} /></div>
-        <div><label className="block text-sm font-medium text-gray-700">Том (Volume)</label><input type="number" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.volume`)} /></div>
-        <div><label className="block text-sm font-medium text-gray-700">Страницы</label><input type="text" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.pages`)} /></div>
-        <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700">URL публикации/Сайт-источник</label><input type="url" className="mt-1 block w-full rounded-lg border-gray-300" {...register(`papers.${index}.source_url`)} /></div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">DOI</label>
+          <input
+            type="text"
+            className="mt-1 block w-full rounded-lg border-gray-300"
+            {...register(`papers.${index}.doi`)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Дата публикации
+          </label>
+          <input
+            type="date"
+            className="mt-1 block w-full rounded-lg border-gray-300"
+            {...register(`papers.${index}.publication_date`)}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Год</label>
+          <input
+            type="number"
+            className="mt-1 block w-full rounded-lg border-gray-300"
+            {...register(`papers.${index}.year`)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Volume (Issue) / article number
+          </label>
+          <input
+            type="text"
+            className="mt-1 block w-full rounded-lg border-gray-300"
+            {...register(`papers.${index}.number`)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Страницы
+          </label>
+          <input
+            type="text"
+            className="mt-1 block w-full rounded-lg border-gray-300"
+            {...register(`papers.${index}.pages`)}
+          />
+        </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Соавторы</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Соавторы
+          </label>
           <div className="space-y-3">
             {coauthorFields.map((coField, aIndex) => (
-              <CoauthorFieldItem 
-                key={coField.id} 
-                paperIndex={index} 
-                index={aIndex} 
-                register={register} 
+              <CoauthorFieldItem
+                key={coField.id}
+                paperIndex={index}
+                index={aIndex}
+                register={register}
                 control={control}
-                remove={remove} 
-                total={coauthorFields.length} 
+                remove={remove}
+                total={coauthorFields.length}
               />
             ))}
             <button
@@ -465,10 +546,19 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
                 className="w-5 h-5 rounded border-gray-300 text-blue-600"
                 {...register(`papers.${index}.has_university_affiliation`)}
               />
-              <label htmlFor={`aff-${index}`} className="ml-3 text-sm font-medium text-gray-700">Есть указание Astana International University</label>
+              <label
+                htmlFor={`aff-${index}`}
+                className="ml-3 text-sm font-medium text-gray-700"
+              >
+                Есть указание Astana International University
+              </label>
             </div>
-            {errors.papers?.[index]?.has_university_affiliation && <p className="ml-8 text-sm text-red-600">{errors.papers[index].has_university_affiliation.message}</p>}
-            
+            {errors.papers?.[index]?.has_university_affiliation && (
+              <p className="ml-8 text-sm text-red-600">
+                {errors.papers[index].has_university_affiliation.message}
+              </p>
+            )}
+
             <div className="flex items-center">
               <input
                 type="checkbox"
@@ -476,14 +566,25 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
                 className="w-5 h-5 rounded border-gray-300 text-blue-600"
                 {...register(`papers.${index}.registered_in_platonus`)}
               />
-              <label htmlFor={`plat-${index}`} className="ml-3 text-sm font-medium text-gray-700">Внесено в ИС Platonus</label>
+              <label
+                htmlFor={`plat-${index}`}
+                className="ml-3 text-sm font-medium text-gray-700"
+              >
+                Внесено в ИС Platonus
+              </label>
             </div>
-            {errors.papers?.[index]?.registered_in_platonus && <p className="ml-8 text-sm text-red-600">{errors.papers[index].registered_in_platonus.message}</p>}
+            {errors.papers?.[index]?.registered_in_platonus && (
+              <p className="ml-8 text-sm text-red-600">
+                {errors.papers[index].registered_in_platonus.message}
+              </p>
+            )}
           </div>
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700">Файл публикации (PDF)</label>
+          <label className="block text-sm font-medium text-gray-700">
+            Файл публикации (PDF)
+          </label>
           <Controller
             control={control}
             name={`papers.${index}.file_upload`}
@@ -499,15 +600,30 @@ function PaperFieldItem({ index, control, register, errors, removePaper, papersC
               />
             )}
           />
-          <p className="text-xs text-gray-500 mt-1">{fileId ? "Загрузите новый файл для замены." : "Обязательно для новых."}</p>
-          {errors.papers?.[index]?.file_upload && <p className="mt-1 text-sm text-red-600">{errors.papers[index].file_upload.message}</p>}
+          <p className="text-xs text-gray-500 mt-1">
+            {fileId
+              ? "Загрузите новый файл для замены."
+              : "Обязательно для новых."}
+          </p>
+          {errors.papers?.[index]?.file_upload && (
+            <p className="mt-1 text-sm text-red-600">
+              {errors.papers[index].file_upload.message}
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function CoauthorFieldItem({ paperIndex, index, register, control, remove, total }) {
+function CoauthorFieldItem({
+  paperIndex,
+  index,
+  register,
+  control,
+  remove,
+  total,
+}) {
   const isAiu = useWatch({
     control,
     name: `papers.${paperIndex}.coauthors.${index}.is_aiu_employee`,
@@ -516,9 +632,15 @@ function CoauthorFieldItem({ paperIndex, index, register, control, remove, total
   return (
     <div className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
       <div className="flex justify-between items-center mb-3">
-        <span className="text-sm font-bold text-gray-700">Соавтор #{index + 1}</span>
+        <span className="text-sm font-bold text-gray-700">
+          Соавтор #{index + 1}
+        </span>
         {total > 1 && (
-          <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => remove(index)}>
+          <button
+            type="button"
+            className="text-xs text-red-600 hover:underline"
+            onClick={() => remove(index)}
+          >
             Удалить
           </button>
         )}
@@ -529,9 +651,14 @@ function CoauthorFieldItem({ paperIndex, index, register, control, remove, total
           type="checkbox"
           id={`aiu-check-${paperIndex}-${index}`}
           className="rounded border-gray-300 text-blue-600 mr-2"
-          {...register(`papers.${paperIndex}.coauthors.${index}.is_aiu_employee`)}
+          {...register(
+            `papers.${paperIndex}.coauthors.${index}.is_aiu_employee`
+          )}
         />
-        <label htmlFor={`aiu-check-${paperIndex}-${index}`} className="text-sm font-medium text-gray-800">
+        <label
+          htmlFor={`aiu-check-${paperIndex}-${index}`}
+          className="text-sm font-medium text-gray-800"
+        >
           Является сотрудником AIU
         </label>
       </div>
@@ -547,10 +674,32 @@ function CoauthorFieldItem({ paperIndex, index, register, control, remove, total
         </div>
         {isAiu && (
           <>
-            <input type="text" placeholder="Должность" className="block w-full rounded-lg border-gray-300" {...register(`papers.${paperIndex}.coauthors.${index}.position`)} />
-            <input type="text" placeholder="Подразделение/Факультет" className="block w-full rounded-lg border-gray-300" {...register(`papers.${paperIndex}.coauthors.${index}.subdivision`)} />
-            <input type="text" placeholder="Телефон" className="block w-full rounded-lg border-gray-300" {...register(`papers.${paperIndex}.coauthors.${index}.telephone`)} />
-            <input type="email" placeholder="Email" className="block w-full rounded-lg border-gray-300" {...register(`papers.${paperIndex}.coauthors.${index}.email`)} />
+            <input
+              type="text"
+              placeholder="Должность"
+              className="block w-full rounded-lg border-gray-300"
+              {...register(`papers.${paperIndex}.coauthors.${index}.position`)}
+            />
+            <input
+              type="text"
+              placeholder="Подразделение/Факультет"
+              className="block w-full rounded-lg border-gray-300"
+              {...register(
+                `papers.${paperIndex}.coauthors.${index}.subdivision`
+              )}
+            />
+            <input
+              type="text"
+              placeholder="Телефон"
+              className="block w-full rounded-lg border-gray-300"
+              {...register(`papers.${paperIndex}.coauthors.${index}.telephone`)}
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              className="block w-full rounded-lg border-gray-300"
+              {...register(`papers.${paperIndex}.coauthors.${index}.email`)}
+            />
           </>
         )}
       </div>

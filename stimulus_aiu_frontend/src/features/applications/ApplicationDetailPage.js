@@ -215,10 +215,10 @@ export default function ApplicationDetailPage() {
 
       <div className="bg-white shadow rounded-xl p-6 mb-6">
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+          {/* <div>
             <dt className="text-sm font-medium text-gray-500">Отчётный год</dt>
             <dd className="mt-1 text-lg font-semibold text-gray-900">{application.report_year}</dd>
-          </div>
+          </div> */}
           <div>
             <dt className="text-sm font-medium text-gray-500">Создано</dt>
             <dd className="mt-1 text-gray-900">
