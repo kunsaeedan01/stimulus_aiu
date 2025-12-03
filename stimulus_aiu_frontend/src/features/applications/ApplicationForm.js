@@ -190,6 +190,7 @@ export default function ApplicationForm({ initialValues, applicationId }) {
             ...paper,
             percentile: paper.percentile ? Number(paper.percentile) : null,
             volume: null,
+            year: paper.year ? Number(paper.year) : null,
             coauthors: (paper.coauthors || []).filter((c) =>
               c.full_name?.trim()
             ),
@@ -270,6 +271,7 @@ export default function ApplicationForm({ initialValues, applicationId }) {
                 has_university_affiliation: false,
                 registered_in_platonus: false,
                 coauthors: [{ is_aiu_employee: false, full_name: "" }],
+                year: "",
               })
             }
           >
